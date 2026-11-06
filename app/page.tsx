@@ -124,6 +124,7 @@ export default function Home() {
       );
       setChannels(updated);
     }
+    setLoading(false);
   };
 
   const fetchVideos = async () => {
@@ -136,7 +137,6 @@ export default function Home() {
     if (!error && data) {
       setVideos(data);
     }
-    setLoading(false);
   };
 
   const handleVote = async (id: number) => {
@@ -145,11 +145,20 @@ export default function Home() {
 
     const newVotes = (channel.votes || 0) + 1;
 
+    // Update local state
     setChannels((prev) =>
       prev.map((c) => (c.id === id ? { ...c, votes: newVotes } : c))
     );
 
-    await supabase.from("channels").update({ votes: newVotes }).eq("id", id);
+    // Update database
+    const { error } = await supabase
+      .from("channels")
+      .update({ votes: newVotes })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Vote update error:", error);
+    }
   };
 
   const handleVideoVote = async (id: number) => {
@@ -196,6 +205,9 @@ export default function Home() {
             <h1 className="text-2xl font-bold tracking-tight">TubeRank</h1>
           </Link>
           <div className="flex gap-3">
+            <Link href="/about" className="text-gray-600 hover:text-black text-sm font-medium px-3 py-2">
+              About
+            </Link>
             <Link href="/login" className="text-gray-600 hover:text-black text-sm font-medium px-3 py-2">
               Login
             </Link>
@@ -237,59 +249,10 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Top Videos Section */}
-      {videos.length > 0 && (
-        <div className="max-w-6xl mx-auto px-4 mb-10">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-5">
-            <h3 className="font-semibold mb-4">Top Videos</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {videos.map((video) => (
-                <div key={video.id} className="group">
-                  {playingVideo === video.video_id ? (
-                    <div className="aspect-video rounded-xl overflow-hidden">
-                      <iframe
-                        src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1`}
-                        className="w-full h-full"
-                        allow="autoplay; encrypted-media"
-                        allowFullScreen
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      className="relative aspect-video rounded-xl overflow-hidden cursor-pointer"
-                      onClick={() => setPlayingVideo(video.video_id)}
-                    >
-                      <img
-                        src={video.thumbnail}
-                        alt={video.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition"
-                      />
-                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                        <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xl">▶</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="mt-2">
-                    <p className="font-medium text-sm line-clamp-2">{video.title}</p>
-                    <p className="text-xs text-gray-500 mt-1">{video.channel_name} • {video.views || "—"} views</p>
-                    <button
-                      onClick={() => handleVideoVote(video.id)}
-                      className="mt-2 text-xs border px-2 py-1 rounded hover:bg-red-50"
-                    >
-                      ▲ {video.votes || 0}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="max-w-6xl mx-auto px-4 pb-20 grid md:grid-cols-3 gap-6">
+        {/* Left Column */}
         <div className="space-y-6">
+          {/* Sponsored */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Sponsored</h3>
@@ -317,6 +280,31 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Rising Channels */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-5">
+            <h3 className="font-semibold mb-4">Rising Channels</h3>
+            <div className="space-y-2">
+              {rising.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No new channels this week</p>}
+              {rising.map((ch) => (
+                <div key={ch.id} className="flex items-center gap-3 p-2.5 hover:bg-rose-50/50 rounded-xl transition">
+                  <img
+                    src={getThumbnail(ch.url, ch.name)}
+                    alt={ch.name}
+                    className="w-10 h-10 rounded-full object-cover bg-gray-100 ring-2 ring-white"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "https://via.placeholder.com/40?text=YT";
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate">{ch.name}</p>
+                    <p className="text-xs text-gray-500">{ch.category} • {ch.subscribers || "—"} • ▲ {ch.votes || 0}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* YouTube Giants */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">YouTube Giants</h3>
@@ -344,7 +332,9 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Right Column */}
         <div className="md:col-span-2 space-y-6">
+          {/* Top Voted Today */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Top Voted Today</h3>
@@ -384,27 +374,55 @@ export default function Home() {
             )}
           </div>
 
+          {/* Top Videos */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-5">
-            <h3 className="font-semibold mb-4">Rising Channels</h3>
-            <div className="space-y-2">
-              {rising.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No new channels this week</p>}
-              {rising.map((ch) => (
-                <div key={ch.id} className="flex items-center gap-3 p-2.5 hover:bg-rose-50/50 rounded-xl transition">
-                  <img
-                    src={getThumbnail(ch.url, ch.name)}
-                    alt={ch.name}
-                    className="w-10 h-10 rounded-full object-cover bg-gray-100 ring-2 ring-white"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "https://via.placeholder.com/40?text=YT";
-                    }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm truncate">{ch.name}</p>
-                    <p className="text-xs text-gray-500">{ch.category} • {ch.subscribers || "—"} • ▲ {ch.votes || 0}</p>
+            <h3 className="font-semibold mb-4">Top Videos</h3>
+            {videos.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-8">No videos yet. Be the first to submit!</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {videos.map((video) => (
+                  <div key={video.id} className="group">
+                    {playingVideo === video.video_id ? (
+                      <div className="aspect-video rounded-xl overflow-hidden">
+                        <iframe
+                          src={`https://www.youtube.com/embed/${video.video_id}?autoplay=1`}
+                          className="w-full h-full"
+                          allow="autoplay; encrypted-media"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="relative aspect-video rounded-xl overflow-hidden cursor-pointer"
+                        onClick={() => setPlayingVideo(video.video_id)}
+                      >
+                        <img
+                          src={video.thumbnail}
+                          alt={video.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition"
+                        />
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                          <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xl">▶</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-2">
+                      <p className="font-medium text-sm line-clamp-2">{video.title}</p>
+                      <p className="text-xs text-gray-500 mt-1">{video.channel_name} • {video.views || "—"} views</p>
+                      <button
+                        onClick={() => handleVideoVote(video.id)}
+                        className="mt-2 text-xs border px-2 py-1 rounded hover:bg-red-50"
+                      >
+                        ▲ {video.votes || 0}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
