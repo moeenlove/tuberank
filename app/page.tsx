@@ -6,14 +6,6 @@ import { supabase } from "../lib/supabase";
 
 const categories = ["All", "Music", "Gaming", "Entertainment", "Education", "Comedy", "Sports", "Science & Tech", "Howto & Style", "News", "Film & Animation"];
 
-const youtubeGiants = [
-  { name: "MrBeast", handle: "MrBeast", category: "Entertainment" },
-  { name: "T-Series", handle: "tseries", category: "Music" },
-  { name: "Cocomelon", handle: "cocomelon", category: "Education" },
-  { name: "SET India", handle: "setindia", category: "Entertainment" },
-  { name: "Vlad and Niki", handle: "VladandNiki", category: "Entertainment" },
-];
-
 const categoryMap: { [key: string]: string } = {
   "1": "Film & Animation",
   "2": "Autos & Vehicles",
@@ -54,14 +46,6 @@ type Video = {
   votes: number;
 };
 
-type Giant = {
-  name: string;
-  handle: string;
-  category: string;
-  subscribers: string | null;
-  thumbnail: string;
-};
-
 type SearchResult = {
   id: string;
   title: string;
@@ -75,23 +59,48 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [videos, setVideos] = useState<Video[]>([]);
-  const [giants, setGiants] = useState<Giant[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [currentChallenge, setCurrentChallenge] = useState("Entertainment");
+  const [timeLeft, setTimeLeft] = useState("00:00:00");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     fetchChannels();
     fetchVideos();
-    fetchGiants();
     
     const challengeCategories = ["Music", "Gaming", "Entertainment", "Education", "Comedy", "Sports", "Science & Tech", "Howto & Style"];
     const weekNumber = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
     const categoryIndex = weekNumber % challengeCategories.length;
     setCurrentChallenge(challengeCategories[categoryIndex]);
+
+    const updateTimeLeft = () => {
+      const now = new Date();
+      const endOfWeek = new Date(now);
+      endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
+      endOfWeek.setHours(23, 59, 59, 999);
+      const diff = endOfWeek.getTime() - now.getTime();
+      
+      if (diff <= 0) {
+        setTimeLeft("00:00:00");
+        return;
+      }
+      
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      setTimeLeft(
+        `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
+      );
+    };
+    updateTimeLeft();
+    const interval = setInterval(updateTimeLeft, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const formatSubscribers = (count: number): string => {
@@ -118,20 +127,6 @@ export default function Home() {
       console.error("Error fetching:", handle, err);
     }
     return null;
-  };
-
-  const fetchGiants = async () => {
-    const results = await Promise.all(
-      youtubeGiants.map(async (g) => {
-        const subs = await fetchSubscriberCount(g.handle);
-        return {
-          ...g,
-          subscribers: subs,
-          thumbnail: `https://unavatar.io/youtube/${g.handle}`,
-        };
-      })
-    );
-    setGiants(results);
   };
 
   const fetchChannels = async () => {
@@ -173,9 +168,34 @@ export default function Home() {
     }
   };
 
+  const fetchSuggestions = async (query: string) => {
+    if (query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `https://corsproxy.io/?${encodeURIComponent(`https://suggestqueries.google.com/complete/search?client=youtube&ds=yt&q=${encodeURIComponent(query)}`)}`
+      );
+      const text = await res.text();
+      const match = text.match(/\[.*\]/);
+      if (match) {
+        const json = JSON.parse(match[0]);
+        if (json[1]) {
+          setSuggestions(json[1].slice(0, 6));
+          setShowSuggestions(true);
+        }
+      }
+    } catch (err) {
+      console.error("Suggestion error:", err);
+    }
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
+    setShowSuggestions(false);
 
     const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
 
@@ -335,6 +355,14 @@ export default function Home() {
     return `https://unavatar.io/youtube/${encodeURIComponent(name)}`;
   };
 
+  const parseSubs = (s: string | null): number => {
+    if (!s) return 0;
+    const num = parseFloat(s);
+    if (s.toLowerCase().includes("m")) return num * 1000000;
+    if (s.toLowerCase().includes("k")) return num * 1000;
+    return num;
+  };
+
   const sponsored = channels.filter((c) => c.is_sponsored === true).slice(0, 10);
 
   const voted = channels.filter((c) => {
@@ -363,6 +391,11 @@ export default function Home() {
     }
     return parseInt(sub) < 100000;
   }).slice(0, 5);
+
+  const topBySubs = [...channels]
+    .filter((c) => c.subscribers)
+    .sort((a, b) => parseSubs(b.subscribers) - parseSubs(a.subscribers))
+    .slice(0, 5);
 
   const challengeChannels = channels
     .filter((c) => c.category === currentChallenge)
@@ -414,14 +447,18 @@ export default function Home() {
           Vote for your favorite channels • Daily rankings • Sponsored visibility
         </p>
 
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-lg mx-auto relative">
           <div className="flex gap-2">
             <input
               type="text"
               placeholder="Search YouTube channels or videos..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                fetchSuggestions(e.target.value);
+              }}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               className="flex-1 px-5 py-3 rounded-full border border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-700/80 backdrop-blur focus:outline-none focus:ring-2 focus:ring-red-500 shadow-sm dark:text-white"
             />
             <button
@@ -432,6 +469,24 @@ export default function Home() {
               {searching ? "..." : "Search"}
             </button>
           </div>
+
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-16 mt-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border dark:border-gray-700 overflow-hidden z-20">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setSearchQuery(s);
+                    setShowSuggestions(false);
+                    setTimeout(() => handleSearch(), 100);
+                  }}
+                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-200"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
 
           {searchResults.length > 0 && (
             <div className="mt-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur rounded-2xl shadow-lg border dark:border-gray-700 p-4 text-left">
@@ -467,9 +522,12 @@ export default function Home() {
               <h3 className="font-semibold text-amber-900 dark:text-amber-200">🏆 Weekly Challenge</h3>
               <p className="text-sm text-amber-700 dark:text-amber-400">Best {currentChallenge} Channel This Week</p>
             </div>
-            <span className="bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 text-xs px-3 py-1 rounded-full font-medium">
-              {currentChallenge}
-            </span>
+            <div className="text-right">
+              <span className="bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 text-xs px-3 py-1 rounded-full font-medium">
+                {currentChallenge}
+              </span>
+              <p className="text-sm text-amber-600 dark:text-amber-400 mt-1 font-mono font-bold">{timeLeft}</p>
+            </div>
           </div>
           <div className="grid md:grid-cols-3 gap-3">
             {challengeChannels.length === 0 && (
@@ -488,7 +546,7 @@ export default function Home() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm truncate">{ch.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">▲ {ch.votes || 0}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{ch.subscribers || "—"} • ▲ {ch.votes || 0}</p>
                 </div>
               </div>
             ))}
@@ -595,24 +653,25 @@ export default function Home() {
 
           <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 dark:border-gray-700 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">YouTube Giants</h3>
-              <span className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs px-2.5 py-1 rounded-full font-medium">All-Time</span>
+              <h3 className="font-semibold">Top Channels</h3>
+              <span className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs px-2.5 py-1 rounded-full font-medium">By Subs</span>
             </div>
             <div className="space-y-2">
-              {giants.map((g, i) => (
-                <div key={g.handle} className="flex items-center gap-3 p-2.5 hover:bg-purple-50/50 dark:hover:bg-gray-700/50 rounded-xl transition">
+              {topBySubs.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No channels yet</p>}
+              {topBySubs.map((ch, i) => (
+                <div key={ch.id} className="flex items-center gap-3 p-2.5 hover:bg-purple-50/50 dark:hover:bg-gray-700/50 rounded-xl transition">
                   <span className="text-sm font-semibold text-gray-400 w-5">{i + 1}</span>
                   <img
-                    src={g.thumbnail}
-                    alt={g.name}
+                    src={getThumbnail(ch.url, ch.name)}
+                    alt={ch.name}
                     className="w-10 h-10 rounded-full object-cover bg-gray-100 ring-2 ring-white dark:ring-gray-700"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = "https://via.placeholder.com/40?text=YT";
                     }}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm truncate">{g.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{g.subscribers || "Loading..."} • {g.category}</p>
+                    <p className="font-medium text-sm truncate">{ch.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{ch.subscribers} • {ch.category}</p>
                   </div>
                 </div>
               ))}
