@@ -33,14 +33,14 @@ export default function SubmitChannel() {
     if (error) {
       setMessage("Error: " + error.message);
     } else {
-      setMessage("Channel successfully submitted!");
+      setMessage("Channel submitted successfully!");
       setForm({ channelName: "", channelUrl: "", category: "Gaming", description: "" });
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+      <header className="bg-white/80 backdrop-blur border-b">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold">T</div>
@@ -50,41 +50,43 @@ export default function SubmitChannel() {
         </div>
       </header>
 
-      <div className="max-w-xl mx-auto px-4 py-12">
-        <h2 className="text-3xl font-bold mb-2">Submit Your Channel</h2>
-        <p className="text-gray-600 mb-8">Apna YouTube channel add karo ranking mein</p>
+      <div className="max-w-xl mx-auto px-4 py-16">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold mb-2">Submit Your Channel</h2>
+          <p className="text-gray-600">Add your YouTube channel to the rankings</p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg border p-8 space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1">Channel Name</label>
+            <label className="block text-sm font-medium mb-1.5">Channel Name</label>
             <input
               type="text"
               required
               value={form.channelName}
               onChange={(e) => setForm({ ...form, channelName: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full border rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-500"
               placeholder="e.g. Tech Burner"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">YouTube Channel URL</label>
+            <label className="block text-sm font-medium mb-1.5">YouTube Channel URL</label>
             <input
               type="url"
               required
               value={form.channelUrl}
               onChange={(e) => setForm({ ...form, channelUrl: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full border rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-500"
               placeholder="https://youtube.com/@channel"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
+            <label className="block text-sm font-medium mb-1.5">Category</label>
             <select
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full border rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-500"
             >
               <option>Gaming</option>
               <option>Education</option>
@@ -93,30 +95,31 @@ export default function SubmitChannel() {
               <option>Vlogs</option>
               <option>Finance</option>
               <option>Comedy</option>
+              <option>Entertainment</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Short Description</label>
+            <label className="block text-sm font-medium mb-1.5">Short Description</label>
             <textarea
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               rows={3}
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="Channel ke baare mein 1-2 line..."
+              className="w-full border rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+              placeholder="Tell us about your channel in 1-2 lines..."
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50"
+            className="w-full bg-red-600 text-white py-3 rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 transition"
           >
             {loading ? "Submitting..." : "Submit Channel"}
           </button>
 
           {message && (
-            <p className={`text-sm text-center ${message.includes("Error") ? "text-red-600" : "text-green-600"}`}>
+            <p className={`text-sm text-center font-medium ${message.includes("Error") ? "text-red-600" : "text-green-600"}`}>
               {message}
             </p>
           )}
