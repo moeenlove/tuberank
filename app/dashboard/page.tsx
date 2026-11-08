@@ -4,172 +4,55 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
 
-type YouTubeVideo = {
-  id: string;
+type Channel = {
+  id: number;
+  name: string;
+  url: string;
+  subscribers: string | null;
+  votes: number;
+  is_sponsored: boolean;
+};
+
+type Video = {
+  id: number;
   title: string;
   thumbnail: string;
-  publishedAt: string;
-  isShort: boolean;
+  channel_name: string;
+  votes: number;
+  views: string | null;
+  likes: string | null;
+  is_short: boolean;
 };
 
 export default function Dashboard() {
-  const [user, setUser] = useState<any>(null);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
-  const [channelUrl, setChannelUrl] = useState("");
-  const [channelName, setChannelName] = useState("");
-  const [videos, setVideos] = useState<YouTubeVideo[]>([]);
-  const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-      }
-      setLoading(false);
-    };
-    getUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    fetchData();
   }, []);
 
-  const addChannel = async (handle: string) => {
-    const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
-    
-    try {
-      const res = await fetch(
-        `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&forHandle=${handle}&key=${apiKey}`
-      );
-      const data = await res.json();
-      
-      if (data.items?.[0]) {
-        const count = parseInt(data.items[0].statistics.subscriberCount);
-        const subs = count >= 1000000 ? (count/1000000).toFixed(1) + "M" : count >= 1000 ? (count/1000).toFixed(1) + "K" : count.toString();
-        const name = data.items[0].snippet.title;
-        
-        setChannelName(name);
-        
-        const { data: existing } = await supabase.from("channels").select("id").eq("url", channelUrl).single();
-        
-        if (!existing) {
-          await supabase.from("channels").insert([{
-            name: name,
-            url: channelUrl,
-            subscribers: subs,
-            category: "Entertainment",
-          }]);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
+  const fetchData = async () => {
+    const [channelsRes, videosRes] = await Promise.all([
+      supabase.from("channels").select("*").order("votes", { ascending: false }).limit(10),
+      supabase.from("videos").select("*").order("votes", { ascending: false }).limit(10),
+    ]);
+    if (channelsRes.data) setChannels(channelsRes.data);
+    if (videosRes.data) setVideos(videosRes.data);
+    setLoading(false);
   };
 
-  const fetchMyVideos = async () => {
-    if (!channelUrl.trim()) return;
-    setFetching(true);
-
-    const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
-    
-    const handleMatch = channelUrl.match(/@([a-zA-Z0-9_.-]+)/);
-    const channelMatch = channelUrl.match(/channel\/(UC[a-zA-Z0-9_-]+)/);
-    const identifier = handleMatch?.[1] || channelMatch?.[1];
-
-    if (!identifier) {
-      alert("Invalid channel URL");
-      setFetching(false);
-      return;
-    }
-
-    await addChannel(identifier);
-
-    try {
-      let channelId = identifier;
-      
-      if (handleMatch) {
-        const channelRes = await fetch(
-          `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${identifier}&key=${apiKey}`
-        );
-        const channelData = await channelRes.json();
-        if (channelData.items?.[0]) {
-          channelId = channelData.items[0].id;
-        }
-      }
-
-      const videosRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&order=date&maxResults=20&key=${apiKey}`
-      );
-      const videosData = await videosRes.json();
-
-      const videoIds = videosData.items?.map((v: any) => v.id.videoId).join(",");
-      
-      if (videoIds) {
-        const detailsRes = await fetch(
-          `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${videoIds}&key=${apiKey}`
-        );
-        const detailsData = await detailsRes.json();
-
-        const parsed: YouTubeVideo[] = detailsData.items?.map((v: any) => {
-          const duration = v.contentDetails.duration;
-          const isShort = duration.includes("PT") && !duration.includes("M") && parseInt(duration.replace(/\D/g, "")) <= 60;
-          return {
-            id: v.id,
-            title: v.snippet.title,
-            thumbnail: v.snippet.thumbnails.medium?.url || v.snippet.thumbnails.default?.url,
-            publishedAt: v.snippet.publishedAt,
-            isShort,
-          };
-        }) || [];
-
-        setVideos(parsed);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error fetching videos");
-    }
-    setFetching(false);
+  const getThumbnail = (url: string, name: string) => {
+    const handleMatch = url?.match(/@([a-zA-Z0-9_.-]+)/);
+    if (handleMatch) return `https://unavatar.io/youtube/${handleMatch[1]}`;
+    const channelMatch = url?.match(/channel\/(UC[a-zA-Z0-9_-]+)/);
+    if (channelMatch) return `https://unavatar.io/youtube/${channelMatch[1]}`;
+    return `https://unavatar.io/youtube/${encodeURIComponent(name)}`;
   };
 
-  const addToRank = async (video: YouTubeVideo) => {
-    const { error } = await supabase.from("videos").insert([{
-      title: video.title,
-      url: `https://youtube.com/watch?v=${video.id}`,
-      video_id: video.id,
-      thumbnail: video.thumbnail,
-      channel_name: channelName || channelUrl.split("@")[1]?.split("/")[0] || "Unknown",
-      category: video.isShort ? "Shorts" : "Entertainment",
-      is_short: video.isShort,
-    }]);
-
-    if (error) {
-      alert("Error: " + error.message);
-    } else {
-      alert("Added to rankings!");
-    }
-  };
-
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 via-white to-orange-50">
-        <div className="text-center">
-          <p className="mb-4 text-gray-600">Please login first</p>
-          <Link href="/login" className="bg-red-600 text-white px-6 py-2 rounded-lg">Login</Link>
-        </div>
-      </div>
-    );
-  }
-
-  const shorts = videos.filter((v) => v.isShort);
-  const regularVideos = videos.filter((v) => !v.isShort);
+  const topVideos = videos.filter((v) => !v.is_short).slice(0, 5);
+  const topShorts = videos.filter((v) => v.is_short).slice(0, 5);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-orange-50">
@@ -179,87 +62,82 @@ export default function Dashboard() {
             <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl flex items-center justify-center text-white font-bold">T</div>
             <h1 className="text-2xl font-bold">TubeRank</h1>
           </Link>
-          <div className="flex gap-4 items-center">
+          <div className="flex gap-4">
             <Link href="/dashboard" className="text-sm font-medium text-red-600">Dashboard</Link>
             <Link href="/videos" className="text-sm font-medium text-gray-600 hover:text-black">Videos</Link>
             <Link href="/shorts" className="text-sm font-medium text-gray-600 hover:text-black">Shorts</Link>
             <Link href="/sponsored" className="text-sm font-medium text-gray-600 hover:text-black">Sponsored</Link>
             <Link href="/about" className="text-sm font-medium text-gray-600 hover:text-black">About</Link>
-            <span className="text-sm text-gray-500">{user.email}</span>
+            <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-black">Login</Link>
           </div>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <h2 className="text-2xl font-bold mb-6">Creator Dashboard</h2>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <h2 className="text-3xl font-bold mb-8">Dashboard</h2>
 
-        <div className="bg-white rounded-2xl shadow-lg border p-6 mb-8">
-          <h3 className="font-semibold mb-4">Fetch Your Videos</h3>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder="Enter your YouTube channel URL (e.g., youtube.com/@yourchannel)"
-              value={channelUrl}
-              onChange={(e) => setChannelUrl(e.target.value)}
-              className="flex-1 px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
-            <button
-              onClick={fetchMyVideos}
-              disabled={fetching}
-              className="bg-red-600 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-red-700 disabled:opacity-50"
-            >
-              {fetching ? "Fetching..." : "Fetch"}
-            </button>
-          </div>
-          {channelName && <p className="text-sm text-gray-500 mt-2">Channel: {channelName}</p>}
-        </div>
-
-        {regularVideos.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg border p-6 mb-6">
-            <h3 className="font-semibold mb-4">Your Videos ({regularVideos.length})</h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              {regularVideos.map((video) => (
-                <div key={video.id} className="flex gap-3 p-3 border rounded-xl">
-                  <img src={video.thumbnail} alt="" className="w-32 h-20 object-cover rounded-lg" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm line-clamp-2">{video.title}</p>
-                    <button
-                      onClick={() => addToRank(video)}
-                      className="mt-2 text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700"
-                    >
-                      Add to Rank
-                    </button>
+        {loading ? (
+          <p className="text-center text-gray-500 py-8">Loading...</p>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="bg-white rounded-2xl shadow-lg border p-5">
+              <h3 className="font-semibold mb-4">Top Channels</h3>
+              <div className="space-y-2">
+                {channels.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No channels yet</p>}
+                {channels.slice(0, 5).map((ch, i) => (
+                  <div key={ch.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                    <span className="text-sm font-semibold text-gray-400 w-5">{i + 1}</span>
+                    <img 
+                      src={getThumbnail(ch.url, ch.name)} 
+                      alt={ch.name} 
+                      className="w-10 h-10 rounded-full object-cover bg-gray-100" 
+                      onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40?text=YT"; }} 
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{ch.name}</p>
+                      <p className="text-xs text-gray-500">{ch.subscribers || "—"} • ▲ {ch.votes || 0}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-lg border p-5">
+              <h3 className="font-semibold mb-4">Top Videos</h3>
+              <div className="space-y-2">
+                {topVideos.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No videos yet</p>}
+                {topVideos.map((v, i) => (
+                  <div key={v.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                    <span className="text-sm font-semibold text-gray-400 w-5">{i + 1}</span>
+                    <img src={v.thumbnail} alt="" className="w-16 h-10 rounded object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{v.title}</p>
+                      <p className="text-xs text-gray-500">{v.channel_name}</p>
+                      <p className="text-xs text-gray-400">👁 {v.views || "—"} • 👍 {v.likes || "—"} • ▲ {v.votes || 0}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-lg border p-5">
+              <h3 className="font-semibold mb-4">Top Shorts</h3>
+              <div className="space-y-2">
+                {topShorts.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No shorts yet</p>}
+                {topShorts.map((v, i) => (
+                  <div key={v.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                    <span className="text-sm font-semibold text-gray-400 w-5">{i + 1}</span>
+                    <img src={v.thumbnail} alt="" className="w-10 h-14 rounded object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{v.title}</p>
+                      <p className="text-xs text-gray-500">{v.channel_name}</p>
+                      <p className="text-xs text-gray-400">👁 {v.views || "—"} • 👍 {v.likes || "—"} • ▲ {v.votes || 0}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        )}
-
-        {shorts.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg border p-6">
-            <h3 className="font-semibold mb-4">Your Shorts ({shorts.length})</h3>
-            <div className="grid md:grid-cols-3 gap-4">
-              {shorts.map((video) => (
-                <div key={video.id} className="border rounded-xl overflow-hidden">
-                  <img src={video.thumbnail} alt="" className="w-full aspect-[9/16] object-cover" />
-                  <div className="p-3">
-                    <p className="font-medium text-sm line-clamp-2">{video.title}</p>
-                    <button
-                      onClick={() => addToRank(video)}
-                      className="mt-2 text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 w-full"
-                    >
-                      Add to Rank
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {videos.length === 0 && !fetching && (
-          <p className="text-center text-gray-500 py-8">Enter your channel URL to fetch videos</p>
         )}
       </div>
     </div>
