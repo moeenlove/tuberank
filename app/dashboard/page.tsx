@@ -16,17 +16,59 @@ export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [channelUrl, setChannelUrl] = useState("");
+  const [channelName, setChannelName] = useState("");
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
   const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+      }
       setLoading(false);
     };
     getUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const addChannel = async (handle: string) => {
+    const apiKey = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
+    
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&forHandle=${handle}&key=${apiKey}`
+      );
+      const data = await res.json();
+      
+      if (data.items?.[0]) {
+        const count = parseInt(data.items[0].statistics.subscriberCount);
+        const subs = count >= 1000000 ? (count/1000000).toFixed(1) + "M" : count >= 1000 ? (count/1000).toFixed(1) + "K" : count.toString();
+        const name = data.items[0].snippet.title;
+        
+        setChannelName(name);
+        
+        const { data: existing } = await supabase.from("channels").select("id").eq("url", channelUrl).single();
+        
+        if (!existing) {
+          await supabase.from("channels").insert([{
+            name: name,
+            url: channelUrl,
+            subscribers: subs,
+            category: "Entertainment",
+          }]);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchMyVideos = async () => {
     if (!channelUrl.trim()) return;
@@ -43,6 +85,8 @@ export default function Dashboard() {
       setFetching(false);
       return;
     }
+
+    await addChannel(identifier);
 
     try {
       let channelId = identifier;
@@ -97,7 +141,7 @@ export default function Dashboard() {
       url: `https://youtube.com/watch?v=${video.id}`,
       video_id: video.id,
       thumbnail: video.thumbnail,
-      channel_name: user?.user_metadata?.full_name || user?.email,
+      channel_name: channelName || channelUrl.split("@")[1]?.split("/")[0] || "Unknown",
       category: video.isShort ? "Shorts" : "Entertainment",
       is_short: video.isShort,
     }]);
@@ -115,9 +159,9 @@ export default function Dashboard() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 via-white to-orange-50">
         <div className="text-center">
-          <p className="mb-4">Please login first</p>
+          <p className="mb-4 text-gray-600">Please login first</p>
           <Link href="/login" className="bg-red-600 text-white px-6 py-2 rounded-lg">Login</Link>
         </div>
       </div>
@@ -135,9 +179,13 @@ export default function Dashboard() {
             <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl flex items-center justify-center text-white font-bold">T</div>
             <h1 className="text-2xl font-bold">TubeRank</h1>
           </Link>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user.email}</span>
-            <Link href="/" className="text-sm text-gray-600 hover:text-black">← Home</Link>
+          <div className="flex gap-4 items-center">
+            <Link href="/dashboard" className="text-sm font-medium text-red-600">Dashboard</Link>
+            <Link href="/videos" className="text-sm font-medium text-gray-600 hover:text-black">Videos</Link>
+            <Link href="/shorts" className="text-sm font-medium text-gray-600 hover:text-black">Shorts</Link>
+            <Link href="/sponsored" className="text-sm font-medium text-gray-600 hover:text-black">Sponsored</Link>
+            <Link href="/about" className="text-sm font-medium text-gray-600 hover:text-black">About</Link>
+            <span className="text-sm text-gray-500">{user.email}</span>
           </div>
         </div>
       </header>
@@ -163,6 +211,7 @@ export default function Dashboard() {
               {fetching ? "Fetching..." : "Fetch"}
             </button>
           </div>
+          {channelName && <p className="text-sm text-gray-500 mt-2">Channel: {channelName}</p>}
         </div>
 
         {regularVideos.length > 0 && (

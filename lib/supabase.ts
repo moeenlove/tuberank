@@ -1,7 +1,19 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-// Temporary hardcoded (baad mein env se le lenge)
-const supabaseUrl = "https://bcaxxeowdghbjsjvwcnu.supabase.co"
-const supabaseAnonKey = "sb_publishable_Qe30WsKLKRVgIw2rL4GTDw_PM_cHww6"
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+let supabaseInstance: SupabaseClient | null = null
+
+export const supabase = (() => {
+  if (!supabaseInstance) {
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        storageKey: 'tuberank-auth',
+      }
+    })
+  }
+  return supabaseInstance
+})()
