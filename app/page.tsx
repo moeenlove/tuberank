@@ -19,8 +19,6 @@ type Video = {
   thumbnail: string;
   channel_name: string;
   votes: number;
-  views: string | null;
-  likes: string | null;
   is_short: boolean;
 };
 
@@ -42,8 +40,8 @@ export default function Home() {
 
   const fetchData = async () => {
     const [channelsRes, videosRes] = await Promise.all([
-      supabase.from("channels").select("*").order("votes", { ascending: false }).limit(10),
-      supabase.from("videos").select("*").order("votes", { ascending: false }).limit(10),
+      supabase.from("channels").select("*"),
+      supabase.from("videos").select("*").order("votes", { ascending: false }),
     ]);
     if (channelsRes.data) setChannels(channelsRes.data);
     if (videosRes.data) setVideos(videosRes.data);
@@ -53,13 +51,28 @@ export default function Home() {
   const getThumbnail = (url: string, name: string) => {
     const handleMatch = url?.match(/@([a-zA-Z0-9_.-]+)/);
     if (handleMatch) return `https://unavatar.io/youtube/${handleMatch[1]}`;
-    const channelMatch = url?.match(/channel\/(UC[a-zA-Z0-9_-]+)/);
-    if (channelMatch) return `https://unavatar.io/youtube/${channelMatch[1]}`;
     return `https://unavatar.io/youtube/${encodeURIComponent(name)}`;
   };
 
-  const topVideos = videos.filter((v) => !v.is_short).slice(0, 5);
-  const topShorts = videos.filter((v) => v.is_short).slice(0, 5);
+  const sponsored = channels.filter((c) => c.is_sponsored).slice(0, 5);
+
+  const videoChannels = [...new Set(videos.filter((v) => !v.is_short).map((v) => v.channel_name))]
+    .map((name) => {
+      const channelVideos = videos.filter((v) => v.channel_name === name && !v.is_short);
+      const channel = channels.find((c) => c.name === name);
+      return { name, votes: channelVideos.reduce((sum, v) => sum + (v.votes || 0), 0), count: channelVideos.length, thumbnail: channelVideos[0]?.thumbnail, subscribers: channel?.subscribers, url: channel?.url };
+    })
+    .sort((a, b) => b.votes - a.votes)
+    .slice(0, 5);
+
+  const shortsChannels = [...new Set(videos.filter((v) => v.is_short).map((v) => v.channel_name))]
+    .map((name) => {
+      const channelShorts = videos.filter((v) => v.channel_name === name && v.is_short);
+      const channel = channels.find((c) => c.name === name);
+      return { name, votes: channelShorts.reduce((sum, v) => sum + (v.votes || 0), 0), count: channelShorts.length, thumbnail: channelShorts[0]?.thumbnail, subscribers: channel?.subscribers, url: channel?.url };
+    })
+    .sort((a, b) => b.votes - a.votes)
+    .slice(0, 5);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-orange-50">
@@ -94,16 +107,19 @@ export default function Home() {
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
             <div className="bg-white rounded-2xl shadow-lg border p-5">
-              <h3 className="font-semibold mb-4">Top Channels</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Sponsored</h3>
+                <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full">Featured</span>
+              </div>
               <div className="space-y-2">
-                {channels.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No channels yet</p>}
-                {channels.slice(0, 5).map((ch, i) => (
-                  <div key={ch.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                {sponsored.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No sponsored channels</p>}
+                {sponsored.map((ch, i) => (
+                  <div key={ch.id} className="flex items-center gap-3 p-2 hover:bg-amber-50 rounded-lg">
                     <span className="text-sm font-semibold text-gray-400 w-5">{i + 1}</span>
-                    <img src={getThumbnail(ch.url, ch.name)} alt={ch.name} className="w-10 h-10 rounded-full object-cover bg-gray-100" onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40?text=YT"; }} />
+                    <img src={getThumbnail(ch.url, ch.name)} alt={ch.name} className="w-10 h-10 rounded-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40?text=YT"; }} />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm truncate">{ch.name}</p>
-                      <p className="text-xs text-gray-500">{ch.subscribers || "—"} • ▲ {ch.votes || 0}</p>
+                      <p className="text-xs text-gray-500">{ch.subscribers || "—"}</p>
                     </div>
                   </div>
                 ))}
@@ -111,17 +127,19 @@ export default function Home() {
             </div>
 
             <div className="bg-white rounded-2xl shadow-lg border p-5">
-              <h3 className="font-semibold mb-4">Top Videos</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Top Video Channels</h3>
+                <Link href="/videos" className="text-xs text-red-600 hover:underline">See all</Link>
+              </div>
               <div className="space-y-2">
-                {topVideos.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No videos yet</p>}
-                {topVideos.map((v, i) => (
-                  <div key={v.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                {videoChannels.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No videos yet</p>}
+                {videoChannels.map((ch, i) => (
+                  <div key={ch.name} className="flex items-center gap-3 p-2 hover:bg-rose-50 rounded-lg">
                     <span className="text-sm font-semibold text-gray-400 w-5">{i + 1}</span>
-                    <img src={v.thumbnail} alt="" className="w-16 h-10 rounded object-cover" />
+                    <img src={ch.thumbnail || getThumbnail(ch.url || "", ch.name)} alt={ch.name} className="w-10 h-10 rounded-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40?text=YT"; }} />
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate">{v.title}</p>
-                      <p className="text-xs text-gray-500">{v.channel_name}</p>
-                      <p className="text-xs text-gray-400">👁 {v.views || "—"} • 👍 {v.likes || "—"} • ▲ {v.votes || 0}</p>
+                      <p className="font-medium text-sm truncate">{ch.name}</p>
+                      <p className="text-xs text-gray-500">{ch.subscribers || "—"} • {ch.count} videos • ▲ {ch.votes}</p>
                     </div>
                   </div>
                 ))}
@@ -129,17 +147,19 @@ export default function Home() {
             </div>
 
             <div className="bg-white rounded-2xl shadow-lg border p-5">
-              <h3 className="font-semibold mb-4">Top Shorts</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Top Shorts Channels</h3>
+                <Link href="/shorts" className="text-xs text-red-600 hover:underline">See all</Link>
+              </div>
               <div className="space-y-2">
-                {topShorts.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No shorts yet</p>}
-                {topShorts.map((v, i) => (
-                  <div key={v.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                {shortsChannels.length === 0 && <p className="text-sm text-gray-500 text-center py-4">No shorts yet</p>}
+                {shortsChannels.map((ch, i) => (
+                  <div key={ch.name} className="flex items-center gap-3 p-2 hover:bg-purple-50 rounded-lg">
                     <span className="text-sm font-semibold text-gray-400 w-5">{i + 1}</span>
-                    <img src={v.thumbnail} alt="" className="w-10 h-14 rounded object-cover" />
+                    <img src={ch.thumbnail || getThumbnail(ch.url || "", ch.name)} alt={ch.name} className="w-10 h-10 rounded-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40?text=YT"; }} />
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate">{v.title}</p>
-                      <p className="text-xs text-gray-500">{v.channel_name}</p>
-                      <p className="text-xs text-gray-400">👁 {v.views || "—"} • 👍 {v.likes || "—"} • ▲ {v.votes || 0}</p>
+                      <p className="font-medium text-sm truncate">{ch.name}</p>
+                      <p className="text-xs text-gray-500">{ch.subscribers || "—"} • {ch.count} shorts • ▲ {ch.votes}</p>
                     </div>
                   </div>
                 ))}

@@ -73,7 +73,6 @@ export default function ShortsPage() {
     else { setSearchResult(null); alert("Not found"); }
   };
 
-  const sponsored = shorts.filter((v) => v.is_sponsored).slice(0, 5);
   const ranked = shorts.filter((v) => !v.is_sponsored);
   const totalPages = Math.ceil(ranked.length / PER_PAGE);
   const paginatedShorts = ranked.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -83,14 +82,8 @@ export default function ShortsPage() {
     setPlayingVideo(paginatedShorts[index].video_id);
   };
 
-  const nextShort = () => {
-    if (currentIndex < paginatedShorts.length - 1) playShort(currentIndex + 1);
-  };
-
-  const prevShort = () => {
-    if (currentIndex > 0) playShort(currentIndex - 1);
-  };
-
+  const nextShort = () => { if (currentIndex < paginatedShorts.length - 1) playShort(currentIndex + 1); };
+  const prevShort = () => { if (currentIndex > 0) playShort(currentIndex - 1); };
   const currentShort = paginatedShorts[currentIndex];
 
   return (
@@ -102,12 +95,15 @@ export default function ShortsPage() {
             <h1 className="text-2xl font-bold">TubeRank</h1>
           </Link>
           <div className="flex gap-4">
-            <Link href="/dashboard" className="text-sm font-medium text-gray-600 hover:text-black">Dashboard</Link>
             <Link href="/videos" className="text-sm font-medium text-gray-600 hover:text-black">Videos</Link>
             <Link href="/shorts" className="text-sm font-medium text-red-600">Shorts</Link>
             <Link href="/sponsored" className="text-sm font-medium text-gray-600 hover:text-black">Sponsored</Link>
             <Link href="/about" className="text-sm font-medium text-gray-600 hover:text-black">About</Link>
-            {user ? <Link href="/profile" className="text-sm font-medium text-gray-600 hover:text-black">Profile</Link> : <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-black">Login</Link>}
+            {user ? (
+              <Link href="/profile" className="text-sm font-medium text-gray-600 hover:text-black">{user.user_metadata?.full_name?.split(" ")[0] || "Profile"}</Link>
+            ) : (
+              <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-black">Login</Link>
+            )}
           </div>
         </div>
       </header>
@@ -115,9 +111,7 @@ export default function ShortsPage() {
       {playingVideo && currentShort && (
         <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
           <button className="absolute top-4 right-4 text-white text-3xl z-10" onClick={() => setPlayingVideo(null)}>✕</button>
-          
-          <button onClick={prevShort} disabled={currentIndex === 0} className="absolute left-4 md:left-20 text-white text-5xl disabled:opacity-30 hover:opacity-80">▲</button>
-          
+          <button onClick={prevShort} disabled={currentIndex === 0} className="absolute left-4 md:left-20 text-white text-5xl disabled:opacity-30">▲</button>
           <div className="h-[85vh] aspect-[9/16] relative">
             <iframe src={`https://www.youtube.com/embed/${playingVideo}?autoplay=1`} className="w-full h-full rounded-xl" allow="autoplay; encrypted-media" allowFullScreen />
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white rounded-b-xl">
@@ -133,14 +127,16 @@ export default function ShortsPage() {
               </button>
             </div>
           </div>
-          
-          <button onClick={nextShort} disabled={currentIndex === paginatedShorts.length - 1} className="absolute right-4 md:right-20 text-white text-5xl disabled:opacity-30 hover:opacity-80">▼</button>
+          <button onClick={nextShort} disabled={currentIndex === paginatedShorts.length - 1} className="absolute right-4 md:right-20 text-white text-5xl disabled:opacity-30">▼</button>
         </div>
       )}
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-bold">Top Shorts</h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-sm text-gray-500 hover:text-black">← Home</Link>
+            <h2 className="text-3xl font-bold">Top Shorts</h2>
+          </div>
           <div className="flex gap-2">
             <input type="text" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500" />
             <button onClick={handleSearch} className="bg-red-600 text-white px-4 py-2 rounded-lg">Search</button>

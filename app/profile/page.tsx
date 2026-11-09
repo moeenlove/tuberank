@@ -97,17 +97,34 @@ export default function Profile() {
       is_short: video.isShort,
     }]);
     if (error) alert("Error: " + error.message);
-    else alert("Added!");
+    else alert("Added to rankings!");
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 via-white to-orange-50">
-        <div className="text-center">
-          <p className="mb-4">Please login first</p>
-          <Link href="/login" className="bg-red-600 text-white px-6 py-2 rounded-lg">Login</Link>
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-orange-50">
+        <header className="bg-white/70 backdrop-blur-md border-b sticky top-0 z-10">
+          <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl flex items-center justify-center text-white font-bold">T</div>
+              <h1 className="text-2xl font-bold">TubeRank</h1>
+            </Link>
+            <div className="flex gap-4">
+              <Link href="/videos" className="text-sm font-medium text-gray-600 hover:text-black">Videos</Link>
+              <Link href="/shorts" className="text-sm font-medium text-gray-600 hover:text-black">Shorts</Link>
+              <Link href="/sponsored" className="text-sm font-medium text-gray-600 hover:text-black">Sponsored</Link>
+              <Link href="/about" className="text-sm font-medium text-gray-600 hover:text-black">About</Link>
+              <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-black">Login</Link>
+            </div>
+          </div>
+        </header>
+        <div className="flex items-center justify-center py-32">
+          <div className="text-center">
+            <p className="mb-4 text-gray-600 text-lg">Please login first</p>
+            <Link href="/login" className="bg-red-600 text-white px-6 py-2.5 rounded-lg font-medium">Login</Link>
+          </div>
         </div>
       </div>
     );
@@ -125,16 +142,19 @@ export default function Profile() {
             <h1 className="text-2xl font-bold">TubeRank</h1>
           </Link>
           <div className="flex gap-4 items-center">
-            <Link href="/dashboard" className="text-sm font-medium text-gray-600 hover:text-black">Dashboard</Link>
             <Link href="/videos" className="text-sm font-medium text-gray-600 hover:text-black">Videos</Link>
             <Link href="/shorts" className="text-sm font-medium text-gray-600 hover:text-black">Shorts</Link>
-            <Link href="/profile" className="text-sm font-medium text-red-600">Profile</Link>
+            <Link href="/sponsored" className="text-sm font-medium text-gray-600 hover:text-black">Sponsored</Link>
+            <Link href="/about" className="text-sm font-medium text-gray-600 hover:text-black">About</Link>
+            <Link href="/profile" className="text-sm font-medium text-red-600">{user.user_metadata?.full_name?.split(" ")[0] || "Profile"}</Link>
             <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-black">Logout</button>
           </div>
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
+        <Link href="/" className="text-sm text-gray-500 hover:text-black mb-4 inline-block">← Home</Link>
+        
         <div className="bg-white rounded-2xl shadow-lg border p-6 mb-8 text-center">
           <div className="w-20 h-20 bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4">
             {user.user_metadata?.full_name?.[0] || user.email?.[0]?.toUpperCase()}
@@ -146,13 +166,7 @@ export default function Profile() {
         <div className="bg-white rounded-2xl shadow-lg border p-6 mb-8">
           <h3 className="font-semibold mb-4">Add Your Content</h3>
           <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder="YouTube channel URL (youtube.com/@yourchannel)"
-              value={channelUrl}
-              onChange={(e) => setChannelUrl(e.target.value)}
-              className="flex-1 px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
-            />
+            <input type="text" placeholder="YouTube channel URL (youtube.com/@yourchannel)" value={channelUrl} onChange={(e) => setChannelUrl(e.target.value)} className="flex-1 px-4 py-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500" />
             <button onClick={fetchMyVideos} disabled={fetching} className="bg-red-600 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-red-700 disabled:opacity-50">
               {fetching ? "Fetching..." : "Fetch"}
             </button>
